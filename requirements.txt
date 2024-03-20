@@ -1,0 +1,5 @@
+h5netcdf==1.1.0
+torch==2.0.1+cu118
+torchaudio==2.0.2+cu118
+torchmetrics==0.11.4
+torchvision==0.15.2+cu118
