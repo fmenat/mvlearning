@@ -6,13 +6,13 @@ from .core.fusion import _MVFusionCore
 
 class MVFusionMissing(_MVFusionCore):
     def __init__(self,
-                 view_encoders: Dict[str,nn.Module],  #require that it contains get_output_size() ..
-                 fusion_module: nn.Module,
+                 view_encoders: Dict[str,nn.Module], 
+                 merge_module: nn.Module,
                  prediction_head: nn.Module,
                  loss_function = None,
                  **kwargs
                  ):
-        super(MVFusionMissing, self).__init__(view_encoders=view_encoders, fusion_module=fusion_module, prediction_head=prediction_head, loss_function=loss_function, **kwargs)
+        super(MVFusionMissing, self).__init__(view_encoders=view_encoders, merge_module=merge_module, prediction_head=prediction_head, loss_function=loss_function, **kwargs)
 
     def forward_encoders(self,
             views: Dict[str, torch.Tensor],
@@ -77,7 +77,7 @@ class MVFusionMissing(_MVFusionCore):
             out_zs_views = self.forward_encoders(views, inference_views=inference_views, missing_method=missing_method ,forward_only_representation=forward_only_representation) 
         if forward_only_representation:
             return out_zs_views
-        out_z_e = self.fusion_module(list(out_zs_views["views:rep"].values()), views_available=views_available_ohv) #carefully, always forward a list
+        out_z_e = self.merge_module(list(out_zs_views["views:rep"].values()), views_available=views_available_ohv) #carefully, always forward a list
        
         out_y = self.prediction_head(out_z_e["joint_rep"])
         return_dic = {"prediction": self.apply_softmax(out_y) if out_norm else out_y }
@@ -96,13 +96,14 @@ class MVFusionMissing(_MVFusionCore):
 class MVFusionMissingMultiLoss(MVFusionMissing):
     def __init__(self,
                  view_encoders: Dict[str,nn.Module],
-                 fusion_module: nn.Module,
+                 merge_module: nn.Module,
                  prediction_head: nn.Module,
                  loss_function = None,
                  multiloss_weights: Union[list, dict, float, int] = [],
+                 **kwargs
                  ):
-        super(MVFusionMissingMultiLoss, self).__init__(view_encoders, fusion_module, prediction_head,
-            loss_function=loss_function)
+        super(MVFusionMissingMultiLoss, self).__init__(view_encoders, merge_module, prediction_head,
+            loss_function=loss_function, **kwargs)
 
         self.aux_predictor_base = copy.deepcopy(self.prediction_head)
 
@@ -110,7 +111,7 @@ class MVFusionMissingMultiLoss(MVFusionMissing):
         for v_name in self.view_names:
             self.aux_predictor[v_name] = copy.deepcopy(self.aux_predictor_base)
             self.aux_predictor[v_name].load_state_dict(self.aux_predictor_base.state_dict())
-            if not self.fusion_module.get_info_dims().get("feature_pool"): #if not pooling, then change first layer of each predictor
+            if not self.merge_module.get_info_dims().get("feature_pool"): #if not pooling, then change first layer of each predictor
                 out_encoder_v_name = self.views_encoder[v_name].get_output_size()
                 self.aux_predictor[v_name].update_first_layer(input_features = out_encoder_v_name)
         self.aux_predictor = nn.ModuleDict(self.aux_predictor)
@@ -163,18 +164,19 @@ class MVFusionMissingMultiLoss(MVFusionMissing):
 class HybridFusion(MVFusionMissingMultiLoss): #feature+decision
     def __init__(self,
                  view_encoders: Dict[str,nn.Module],
-                 fusion_module_feat: nn.Module,
+                 merge_module_feat: nn.Module,
                  prediction_head: nn.Module,
                  loss_function = None,
-                 fusion_module_deci: nn.Module = None,
+                 merge_module_deci: nn.Module = None,
                  multiloss_weights: Union[list, dict, float, int] = 0,
+                 **kwargs
                  ):
-        super(HybridFusion, self).__init__(view_encoders, fusion_module_feat, prediction_head,
-            loss_function=loss_function, multiloss_weights=multiloss_weights)
-        if fusion_module_deci is not None:
-            self.fusion_module_deci = fusion_module_deci
+        super(HybridFusion, self).__init__(view_encoders, merge_module_feat, prediction_head,
+            loss_function=loss_function, multiloss_weights=multiloss_weights, **kwargs)
+        if merge_module_deci is not None:
+            self.merge_module_deci = merge_module_deci
         else:
-            self.fusion_module_deci = lambda x: {"joint_rep": torch.mean( torch.stack(x, 1), axis=1 )}
+            self.merge_module_deci = lambda x: {"joint_rep": torch.mean( torch.stack(x, 1), axis=1 )}
 
     def forward(self, views: Dict[str, torch.Tensor], intermediate = True, out_norm=False, **kwargs):
         if type(views) == list:
@@ -186,7 +188,7 @@ class HybridFusion(MVFusionMissingMultiLoss): #feature+decision
         for v_name in self.view_names:
             out_y_zs[v_name] = self.aux_predictor[v_name]( out_dic["views:rep"][v_name])
         out_dic["views:prediction"] = out_y_zs
-        aux_out = self.fusion_module_deci(list(out_y_zs.values()))
+        aux_out = self.merge_module_deci(list(out_y_zs.values()))
         out_dic["fusion:prediction"]["dec"] = aux_out.pop("joint_rep")
         if intermediate:
             if "att_views" in aux_out:
@@ -210,9 +212,10 @@ class SVPool(MVFusionMissing):
     def __init__(self,
                  prediction_models: Dict[str,nn.Module],
                  loss_function = None,
+                 **kwargs
                  ):
         super(SVPool, self).__init__(prediction_models, nn.Identity(), nn.Identity(),
-            loss_function=loss_function)    
+            loss_function=loss_function, **kwargs)  
 
     def forward(self, views: Dict[str, torch.Tensor], intermediate=True, out_norm=False):
         if type(views) == list:
@@ -232,8 +235,8 @@ class SVPool(MVFusionMissing):
         loss_dic = { }
         loss_aux = 0
         for v_name in self.view_names: #for missing needs to be changed
-            loss_dic["loss"+v_name] = self.loss_function(yi_xi[v_name], views_target)
-            loss_aux += loss_dic["loss"+v_name]
+            loss_dic["loss "+v_name] = self.loss_function(yi_xi[v_name], views_target)
+            loss_aux += loss_dic["loss "+v_name]
 
         return {"objective": loss_aux, **loss_dic}
 

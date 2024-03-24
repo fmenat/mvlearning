@@ -24,8 +24,12 @@ DecisionFusion({"view 1": pytorch_model1, "view 2": pytorch_model2, ...})
 * For Feature fusion you can just create it with
 ```python
 from mvlearning.fusion import FeatureFusion
-FeatureFusion({"view 1": pytorch_encoder1, "view 2": pytorch_encoder2, ...}, pytorch_module_fusing, pytorch_model_head)
+FeatureFusion({"view 1": pytorch_encoder1, "view 2": pytorch_encoder2, ...}, pytorch_merge_module, pytorch_model_head)
 ```
+
+### Details
+* The encoders have to had a function called ```get_output_size``` where the dimension of the output is returned.
+* For detailed examples see the [./examples] folder.
 
 
 ## Install

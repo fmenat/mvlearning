@@ -7,11 +7,10 @@ from torch import nn
 from ..utils import stack_all, object_to_list, collate_all_list, detach_all, get_dic_emb_dims
 
 try:
-    import pytorch_lightning
+    from .pl_core import _BaseViewsLightning
     PL_AVAILABLE = True
 except:
     PL_AVAILABLE = False
-    from .pl_core import _BaseViewsLightning
 
 class _MVFusionCore(ABC, _BaseViewsLightning if PL_AVAILABLE else nn.Module):
     #ONLY FOR POINT-PREDICTION
@@ -21,22 +20,22 @@ class _MVFusionCore(ABC, _BaseViewsLightning if PL_AVAILABLE else nn.Module):
     #support list and dictionary of emb dims -- but transform to dict
     def __init__(self,
                  view_encoders: Dict[str,nn.Module],  #require that it contains get_output_size() ..
-                 fusion_module: nn.Module,
+                 merge_module: nn.Module,
                  prediction_head: nn.Module,
                  loss_function = None,
                  **kwargs
                  ):
-        super(_MVFusionCore, self).__init__()
+        super(_MVFusionCore, self).__init__(**kwargs)
         if len(view_encoders) == 0:
             raise Exception("you have to give a encoder models (nn.Module), currently view_encoders=[] or {}")
         if type(prediction_head) == type(None):
             raise Exception("you need to define a prediction_head")
-        if type(fusion_module) == type(None):
-            raise Exception("you need to define a fusion_module")
+        if type(merge_module) == type(None):
+            raise Exception("you need to define a merge_module")
 
         self.views_encoder = nn.ModuleDict(view_encoders)
         self.view_names = list(self.views_encoder.keys())
-        self.fusion_module = fusion_module
+        self.merge_module = merge_module
         self.prediction_head = prediction_head
         
         self.loss_function = loss_function
@@ -62,8 +61,8 @@ class _MVFusionCore(ABC, _BaseViewsLightning if PL_AVAILABLE else nn.Module):
         else:
             self.where_fusion = "feature"
 
-        if hasattr(self.fusion_module, "get_info_dims"):
-            info = self.fusion_module.get_info_dims()
+        if hasattr(self.merge_module, "get_info_dims"):
+            info = self.merge_module.get_info_dims()
             self.joint_dim = info["joint_dim"]
             self.feature_pool = info["feature_pool"]
         else:
@@ -99,7 +98,7 @@ class _MVFusionCore(ABC, _BaseViewsLightning if PL_AVAILABLE else nn.Module):
             raise Exception("views in batch should be a List or Dict")
 
         if type(self.loss_function) == torch.nn.CrossEntropyLoss:
-            views_target = torch.squeeze(views_target)
+            views_target = torch.squeeze(views_target).to(torch.int64)
         else:
             views_target = views_target.to(torch.float32)
         return views_dict, views_target
