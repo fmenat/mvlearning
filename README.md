@@ -10,7 +10,7 @@ Framework for different fusion strategies in multi-view learning with PyTorch. _
 For definitions on the concepts used here please look at [Common Practices and Taxonomy in Deep Multiview Fusion for Remote Sensing Applications](https://ieeexplore.ieee.org/document/10418966).
 
 
-## Use
+## Usage
 * For Input fusion (with feature concatenation) you can just create it with
 ```python
 from mvlearning.fusion import InputFusion
@@ -29,7 +29,7 @@ FeatureFusion({"view 1": pytorch_encoder1, "view 2": pytorch_encoder2, ...}, pyt
 
 ### Details
 * The encoders have to had a function called ```get_output_size``` where the dimension of the output is returned.
-* For detailed examples see the [./examples] folder.
+* For detailed examples see the [Examples](./examples) folder.
 
 
 ## Install
