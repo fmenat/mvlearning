@@ -1,11 +1,11 @@
 from torch import nn
 from typing import List, Union, Dict
 
-from .base_fusion import MVFusionMissing, MVFusionMissingMultiLoss, SVPool, HybridFusion
+from .base_fusion import MVFusion, MVFusionMultiLoss, SVPool, HybridFusion
 from .merge_module import MergeModule
 from .utils import Lambda, get_dic_emb_dims
 
-class InputFusion(MVFusionMissing):
+class InputFusion(MVFusion):
     def __init__(self,
                  predictive_model,
                  view_names: list,
@@ -33,7 +33,7 @@ class InputFusion(MVFusionMissing):
         super(InputFusion, self).__init__(fake_view_encoders, merge_module, predictive_model,
             loss_function=loss_function, **kwargs)
 
-class FeatureFusion(MVFusionMissing):
+class FeatureFusion(MVFusion):
     def __init__(self,
                  view_encoders,
                  merge_module: nn.Module,
@@ -52,7 +52,7 @@ class FeatureFusion(MVFusionMissing):
         super(FeatureFusion, self).__init__(view_encoders, merge_module, predictive_model,
              loss_function=loss_function, **kwargs)
 
-class FeatureFusionMultiLoss(MVFusionMissingMultiLoss):
+class FeatureFusionMultiLoss(MVFusionMultiLoss):
     def __init__(self,
                  view_encoders,
                  merge_module: nn.Module,
@@ -75,7 +75,7 @@ class FeatureFusionMultiLoss(MVFusionMissingMultiLoss):
         super(FeatureFusionMultiLoss, self).__init__(view_encoders, merge_module, predictive_model,
              loss_function=loss_function,multiloss_weights=multiloss_weights, **kwargs)
 
-class DecisionFusion(MVFusionMissing):
+class DecisionFusion(MVFusion):
     def __init__(self,
                  view_encoders,
                  merge_module: dict = {},
@@ -96,7 +96,7 @@ class DecisionFusion(MVFusionMissing):
         super(DecisionFusion, self).__init__(view_encoders, merge_module, Lambda(lambda x: x["rep"] if type(x) == dict else x),
             loss_function=loss_function, **kwargs)
 
-class DecisionFusionMultiLoss(MVFusionMissingMultiLoss):
+class DecisionFusionMultiLoss(MVFusionMultiLoss):
     def __init__(self,
                  view_encoders,
                  merge_module: dict = {},
