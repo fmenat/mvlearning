@@ -23,6 +23,8 @@ class _MVFusionCore(ABC, _BaseViewsLightning if PL_AVAILABLE else nn.Module):
                  merge_module: nn.Module,
                  prediction_head: nn.Module,
                  loss_function = None,
+                 maug = None, #missing as augmentation component
+                 maug_args = {}, #arguments for missing augmentation
                  **kwargs
                  ):
         super(_MVFusionCore, self).__init__(**kwargs)
@@ -38,10 +40,12 @@ class _MVFusionCore(ABC, _BaseViewsLightning if PL_AVAILABLE else nn.Module):
         self.merge_module = merge_module
         self.prediction_head = prediction_head
         
+        #for training
         self.loss_function = loss_function
+        self.maug = maug 
+        self.maug_args = maug_args
         
-        self.set_additional()
-        self.set_missing_info()
+        self.set_missing_info() 
 
     def get_encoders(self):
         return self.views_encoder
@@ -52,37 +56,16 @@ class _MVFusionCore(ABC, _BaseViewsLightning if PL_AVAILABLE else nn.Module):
     def get_embeddings_size(self):
         return get_dic_emb_dims(self.views_encoder)
 
-    def set_additional(self):
-        self.N_views = len(self.views_encoder)
-        if type(self.prediction_head) == nn.Identity:
-            self.where_fusion = "decision"
-        elif all([nn.Identity == type(v) for v in self.views_encoder.values()]):
-            self.where_fusion = "input"
-        else:
-            self.where_fusion = "feature"
-
-        if hasattr(self.merge_module, "get_info_dims"):
-            info = self.merge_module.get_info_dims()
-            self.joint_dim = info["joint_dim"]
-            self.feature_pool = info["feature_pool"]
-        else:
-            self.feature_pool = False
-            self.joint_dim = 0
-            self.where_fusion = "no_fusion_info"
-
-        if "decision" == self.where_fusion and (not self.feature_pool):
-            raise Exception("Cannot use decision-level fusion with non feature_pools, perhaps trying set adaptive=True or use agg_mode=[mean, sum, max]")
-
     def set_missing_info(self, name:str="impute", where:str ="", value_fill=None, **kwargs):
-        if name =="impute": #for case of impute
-            where = "input" if where == "" else where #default value: input
-            value_fill = 0.0 if type(value_fill) == type(None) else value_fill #default value: 0.0
+        if name =="impute": 
+            where = "input" if where == "" else where 
+            value_fill = 0.0 if type(value_fill) == type(None) else value_fill
         elif name == "adapt": #for case of adapt
             where = "feature" if where =="" else where #default value: input
-            value_fill = torch.nan if type(value_fill) == type(None) else value_fill #default value: 0.0
+            value_fill = torch.nan if type(value_fill) == type(None) else value_fill 
         self.missing_method = {"name": name, "where": where, "value_fill": value_fill}
 
-    def prepare_batch(self, batch: dict) -> list:
+    def prepare_batch(self, batch: dict, return_target=True) -> list:
         views_data, views_target = batch["views"], batch["target"]
 
         if type(views_data) == list:
@@ -97,10 +80,13 @@ class _MVFusionCore(ABC, _BaseViewsLightning if PL_AVAILABLE else nn.Module):
         else:
             raise Exception("views in batch should be a List or Dict")
 
-        if type(self.loss_function) == torch.nn.CrossEntropyLoss:
-            views_target = torch.squeeze(views_target).to(torch.int64)
+        if return_target:
+            if type(self.loss_function) == torch.nn.CrossEntropyLoss:
+                views_target = torch.squeeze(views_target).to(torch.int64)
+            else:
+                views_target = views_target.to(torch.float32)
         else:
-            views_target = views_target.to(torch.float32)
+            views_target = None
         return views_dict, views_target
 
     def transform(self,
@@ -119,15 +105,14 @@ class _MVFusionCore(ABC, _BaseViewsLightning if PL_AVAILABLE else nn.Module):
 
         #return numpy arrays based on dictionary
         """
-        device = ("cuda" if torch.cuda.is_available() else "cpu") if device == "" else device
-        device_used = torch.device(device)
+        device_used = torch.device(("cuda" if torch.cuda.is_available() else "cpu") if device == "" else device)
 
         missing_forward = True #flag to use random forward (based on percentage) in testing cases
         self.eval() #set batchnorm and dropout off
         self.to(device_used)
         with torch.no_grad():
             for batch_idx, batch in enumerate(loader):
-                views_dict, views_target = self.prepare_batch(batch)
+                views_dict, _ = self.prepare_batch(batch, return_target=False)
                 for view_name in views_dict:
                     views_dict[view_name] = views_dict[view_name].to(device_used)
                     

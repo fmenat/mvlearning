@@ -3,6 +3,7 @@ from torch import nn
 from typing import List, Union, Dict
 
 from .core.fusion import _MVFusionCore
+from .missing.simulate import augment_random_missing, augment_randomlist_missing
 
 class MVFusion(_MVFusionCore):
     def __init__(self,
@@ -10,9 +11,11 @@ class MVFusion(_MVFusionCore):
                  merge_module: nn.Module,
                  prediction_head: nn.Module,
                  loss_function = None,
+                 *args,
                  **kwargs
                  ):
-        super(MVFusion, self).__init__(view_encoders=view_encoders, merge_module=merge_module, prediction_head=prediction_head, loss_function=loss_function, **kwargs)
+        
+        super(MVFusion, self).__init__(view_encoders=view_encoders, merge_module=merge_module, prediction_head=prediction_head, loss_function=loss_function, *args, **kwargs)
 
     def forward_encoders(self,
             views: Dict[str, torch.Tensor],
@@ -22,27 +25,21 @@ class MVFusion(_MVFusionCore):
             ) -> Dict[str, torch.Tensor]:
         if type(views) == list:
             raise Exception("Please feed forward function with dictionary data {view_name_str: torch.Tensor} instead of list")
-        
-        if forward_only_representation:
-            model_views = list(views.keys())
-        else:
-            model_views = self.view_names 
-        if len(inference_views) == 0:
-            inference_views = model_views 
+        model_views = list(views.keys()) if forward_only_representation else self.view_names 
+        inference_views = model_views if len(inference_views) == 0 else inference_views
 
         zs_views = {}
         for v_name in model_views:
             forward_f = True  #just a flag when no forward for missing views
-            if v_name in inference_views and v_name in views: #standard for full-view scenario
+            if v_name in inference_views and v_name in views: #standard full-view scenario
                 data_forward = views[v_name]
             else: 
-                if missing_method == {}:
-                    missing_method = self.missing_method
+                missing_method = self.missing_method if missing_method == {} else missing_method
 
-                if missing_method.get("where") == "input": #fill when view not in testing forward or view is missing
-                    data_forward = torch.ones_like(views[v_name])*missing_method["value_fill"] #asumming data is available
+                if missing_method.get("where") == "input": #Default: fill when view not in testing forward or view is missing
+                    data_forward = torch.ones_like(views[v_name])*missing_method["value_fill"] 
 
-                elif missing_method.get("where") == "feature": #avoid forward and fill at feature
+                elif missing_method.get("where") == "feature": #avoid forward and fill at feature-level
                     forward_f = False
                     value_fill = torch.nan if missing_method["value_fill"] == "nan" else missing_method["value_fill"]
                     zs_views[v_name] = torch.ones(self.views_encoder[v_name].get_output_size(), device=self.device).repeat(
@@ -63,25 +60,26 @@ class MVFusion(_MVFusionCore):
             forward_only_representation: bool = False, 
             forward_from_representation: bool = False, 
             ) -> Dict[str, torch.Tensor]:
-        if type(views) == list:
-            raise Exception("Please feed forward function with dictionary data {view_name_str: torch.Tensor} instead of list")
-        
-        if len(inference_views) != 0 and missing_method.get("name") == "adapt":  
-            views_available_ohv = torch.Tensor([1 if v in inference_views else 0 for v in self.view_names])
-        else:
-            views_available_ohv = []
-
+        #encoder forward
         if forward_from_representation:
             out_zs_views = {"views:rep": views}
         else:
             out_zs_views = self.forward_encoders(views, inference_views=inference_views, missing_method=missing_method ,forward_only_representation=forward_only_representation) 
         if forward_only_representation:
             return out_zs_views
+        
+        #merge function forward
+        if len(inference_views) != 0 and missing_method.get("name") == "adapt":  
+            views_available_ohv = torch.Tensor([1 if v in inference_views else 0 for v in self.view_names])
+        else:
+            views_available_ohv = []
         views_data = [ out_zs_views["views:rep"][v] for v in sorted(out_zs_views["views:rep"].keys())] # this ensures that given the same views passed for training, this list will have a consistent order
         out_z_e = self.merge_module(views_data, views_available=views_available_ohv)
        
+        #prediciton head forward
         out_y = self.prediction_head(out_z_e["joint_rep"])
         return_dic = {"prediction": self.apply_softmax(out_y) if out_norm else out_y }
+        
         if intermediate:
             return dict( **return_dic, **out_zs_views, **out_z_e)
         else:
@@ -89,8 +87,14 @@ class MVFusion(_MVFusionCore):
 
     def loss_batch(self, batch: dict) -> dict:
         views_dict, views_target = self.prepare_batch(batch)
-        out_dic = self(views_dict) 
-
+        if self.maug.lower() == "sensd" and self.training:
+            inference_views = augment_random_missing(self.view_names, drop_ratio=self.maug_args.get("drop_ratio", 0.5))
+            out_dic = self(views_dict, inference_views=inference_views, missing_method=self.missing_method)
+        elif self.maug.lower() == "sensd" and self.training:
+            inference_views = augment_randomlist_missing(self.view_names)
+            out_dic = self(views_dict, inference_views=inference_views, missing_method=self.missing_method)
+        else:
+            out_dic = self(views_dict) 
         return {"objective": self.loss_function(out_dic["prediction"], views_target)}
 
 
@@ -128,8 +132,6 @@ class MVFusionMultiLoss(MVFusion):
             self.multiloss_weights = {v_name: multiloss_weights for v_name in self.view_names}
 
     def forward(self, views: Dict[str, torch.Tensor], intermediate = True, out_norm=False, **kwargs):
-        if type(views) == list:
-            raise Exception("Please feed forward function with dictionary data {view_name_str: torch.Tensor} instead of list")
         out_dic = super(MVFusionMultiLoss, self).forward(views, intermediate = True, out_norm=out_norm, **kwargs)
 
         out_y_zs = {}
@@ -157,7 +159,6 @@ class MVFusionMultiLoss(MVFusion):
             if self.multiloss_weights[v_name] != 0:
                 loss_dic["loss"+v_name] = self.multiloss_weights[v_name]*self.loss_function(yi_xi[v_name], views_target)
                 loss_aux += loss_dic["loss"+v_name]
-
         return {"objective": loss_main+loss_aux/len(self.view_names),
                 "lossmain":loss_main, "lossaux":loss_aux, **loss_dic}
 
@@ -180,8 +181,6 @@ class HybridFusion(MVFusionMultiLoss): #feature+decision
             self.merge_module_deci = lambda x: {"joint_rep": torch.mean( torch.stack(x, 1), axis=1 )}
 
     def forward(self, views: Dict[str, torch.Tensor], intermediate = True, out_norm=False, **kwargs):
-        if type(views) == list:
-            raise Exception("Please feed forward function with dictionary data {view_name_str: torch.Tensor} instead of list")
         out_dic = super(HybridFusion, self).forward(views, intermediate = True, out_norm=out_norm, **kwargs)
         out_dic["fusion:prediction"] = {"feat": out_dic.pop("prediction") }
 
@@ -208,8 +207,7 @@ class HybridFusion(MVFusionMultiLoss): #feature+decision
         return out_dic
 
 
-class SVPool(MVFusion):
-    #train single-view learning models in a pool, independently between each other
+class SVPool(MVFusion): #train single-view learning models in a pool, independently between each other
     def __init__(self,
                  prediction_models: Dict[str,nn.Module],
                  loss_function = None,
@@ -219,9 +217,10 @@ class SVPool(MVFusion):
             loss_function=loss_function, **kwargs)  
 
     def forward(self, views: Dict[str, torch.Tensor], intermediate=True, out_norm=False):
-        if type(views) == list:
-            raise Exception("Please feed forward function with dictionary data {view_name_str: torch.Tensor} instead of list")
+        #forward over entire model (encoders are the prediciton models completely)
         out_y_zs = self.forward_encoders(views)
+
+        #do not merge!
 
         for v_name in out_y_zs["views:rep"]:
             out_y_zs[v_name] = self.apply_softmax(out_y_zs["views:rep"][v_name]) if out_norm else out_y_zs["views:rep"][v_name]
@@ -235,10 +234,9 @@ class SVPool(MVFusion):
 
         loss_dic = { }
         loss_aux = 0
-        for v_name in self.view_names: #for missing needs to be changed
+        for v_name in self.view_names: 
             loss_dic["loss "+v_name] = self.loss_function(yi_xi[v_name], views_target)
             loss_aux += loss_dic["loss "+v_name]
-
         return {"objective": loss_aux, **loss_dic}
 
     def get_sv_models(self):

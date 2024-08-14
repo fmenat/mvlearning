@@ -11,6 +11,7 @@ class InputFusion(MVFusion):
                  view_names: list,
                  merge_module: dict = {},
                  loss_function= None,
+                 *args,
                  **kwargs
                  ):
         """
@@ -28,10 +29,9 @@ class InputFusion(MVFusion):
         fake_view_encoders = {}
         for v in view_names:
             aux = nn.Identity()
-            #aux.get_output_size = lambda : v
             fake_view_encoders[v] = aux
         super(InputFusion, self).__init__(fake_view_encoders, merge_module, predictive_model,
-            loss_function=loss_function, **kwargs)
+            loss_function=loss_function, *args, **kwargs)
 
 class FeatureFusion(MVFusion):
     def __init__(self,
@@ -39,6 +39,7 @@ class FeatureFusion(MVFusion):
                  merge_module: nn.Module,
                  predictive_model: nn.Module,
                  loss_function= None,
+                 *args,
                  **kwargs
                  ):
         """
@@ -50,7 +51,7 @@ class FeatureFusion(MVFusion):
             * loss_function: Torch loss function module
         """
         super(FeatureFusion, self).__init__(view_encoders, merge_module, predictive_model,
-             loss_function=loss_function, **kwargs)
+             loss_function=loss_function, *args, **kwargs)
 
 class FeatureFusionMultiLoss(MVFusionMultiLoss):
     def __init__(self,
@@ -59,6 +60,7 @@ class FeatureFusionMultiLoss(MVFusionMultiLoss):
                  predictive_model: nn.Module,
                  loss_function= None,
                  multiloss_weights = [],
+                 *args,
                  **kwargs
                  ):
         """
@@ -73,20 +75,21 @@ class FeatureFusionMultiLoss(MVFusionMultiLoss):
             * multiloss_weights: (Optional) a single value or a dictionary with the values in the loss for each view
         """
         super(FeatureFusionMultiLoss, self).__init__(view_encoders, merge_module, predictive_model,
-             loss_function=loss_function,multiloss_weights=multiloss_weights, **kwargs)
+             loss_function=loss_function,multiloss_weights=multiloss_weights, *args, **kwargs)
 
 class DecisionFusion(MVFusion):
     def __init__(self,
                  view_encoders,
                  merge_module: dict = {},
                  loss_function= None,
+                 *args,
                  **kwargs
                  ):
         """
         Arguments
         ---
             * view_encoders: A dictionary with a Torch model that generate the embedding of each view.
-            * merge_module: (Optional) If want to use an alternative fusion outside averaging
+            * merge_module: (Optional) If want to use an alternative fusion outside averaging. However it has to be a pooling function (sum, product, maximum, etc)
             * loss_function: Torch loss function module
         """
         if type(merge_module) == dict:
@@ -94,7 +97,7 @@ class DecisionFusion(MVFusion):
                 merge_module = {"mode": "avg", "adaptive":False, "emb_dims": get_dic_emb_dims(view_encoders) }
             merge_module = MergeModule(**merge_module)
         super(DecisionFusion, self).__init__(view_encoders, merge_module, Lambda(lambda x: x["rep"] if type(x) == dict else x),
-            loss_function=loss_function, **kwargs)
+            loss_function=loss_function, *args, **kwargs)
 
 class DecisionFusionMultiLoss(MVFusionMultiLoss):
     def __init__(self,
@@ -102,6 +105,7 @@ class DecisionFusionMultiLoss(MVFusionMultiLoss):
                  merge_module: dict = {},
                  loss_function= None,
                  multiloss_weights = [],
+                 *args, 
                  **kwargs
                  ):
         """
@@ -119,7 +123,7 @@ class DecisionFusionMultiLoss(MVFusionMultiLoss):
                 merge_module = {"mode": "avg", "adaptive":False, "emb_dims": get_dic_emb_dims(view_encoders)}
             merge_module = MergeModule(**merge_module)
         super(DecisionFusionMultiLoss, self).__init__(view_encoders, merge_module,  Lambda(lambda x: x["rep"] if type(x) == dict else x),
-            loss_function=loss_function, multiloss_weights=multiloss_weights, **kwargs)
+            loss_function=loss_function, multiloss_weights=multiloss_weights, *args, **kwargs)
 
 class HybridFusion_FD(HybridFusion):
     def __init__(self,
@@ -128,6 +132,7 @@ class HybridFusion_FD(HybridFusion):
                  predictive_model: nn.Module,
                  loss_function= None,
                  merge_module_deci: nn.Module = None,
+                 *args,
                  **kwargs
                  ):
         """
@@ -140,7 +145,7 @@ class HybridFusion_FD(HybridFusion):
             * merge_module_deci: (Optional) Merge function used in the decision level, otherwise the average will be used
         """
         super(HybridFusion_FD, self).__init__(view_encoders, merge_module_feat, predictive_model,
-             loss_function=loss_function,merge_module_deci=merge_module_deci, **kwargs)
+             loss_function=loss_function,merge_module_deci=merge_module_deci, *args, **kwargs)
 
 class SingleViewPool(SVPool):
     pass

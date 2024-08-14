@@ -10,7 +10,7 @@ Framework for different fusion strategies in multi-view learning with PyTorch. _
 For definitions on the concepts used here please look at [Common Practices and Taxonomy in Deep Multiview Fusion for Remote Sensing Applications](https://ieeexplore.ieee.org/document/10418966).
 
 
-## Usage
+## Fusion types usage
 * For Input fusion (with feature concatenation) you can just create it with
 ```python
 from mvlearning.fusion import InputFusion
@@ -38,3 +38,38 @@ FeatureFusion({"view 1": pytorch_encoder1, "view 2": pytorch_encoder2, ...}, pyt
 ```
 pip install --editable .
 ```
+
+---
+
+## Sensor Dropout (SensD)
+
+[![paper](https://img.shields.io/badge/arXiv-2407.15512-D12424)](https://www.arxiv.org/abs/2407.15512) 
+
+We include a new component based on our recent [paper](#citation). This component randomly drop sensors (or **views** in our case) during training. In practice the drop means it replace the values with 0, but other options can be easily extended. 
+
+* In any of the model described ([fusion types](#fusion-types-usage)) the sensor dropout will work by just indicating *sensd* in the ``maug`` argument.  
+> The ``maug_args`` with *drop_ratio* is optional. In case it is not used it will randomly select one missing combination from the list of all possible missing cases.
+```python
+from mvlearning.fusion import InputFusion
+InputFusion(..., maug="sensd", maug_args= {"drop_ratio": 0.3})
+... #same for other fusion types
+```
+
+* [Example on how to train with this technique](./examples/maug_training.ipynb)
+
+
+### Citation
+:scroll: Mena, Francisco, et al. "*Increasing the robustness of model predictions to missing sensors in Earth observation*." accepted at the [MACLEAN workshop](https://sites.google.com/view/maclean24) in the ECML/PKDD, 2024.
+```bibtex
+@article{mena2024increasing,
+  title={Increasing the Robustness of Model Predictions to Missing Sensors in Earth Observation},
+  author={Mena, Francisco and Arenas, Diego and Dengel, Andreas},
+  journal={arXiv preprint arXiv:2407.15512},
+  year={2024}
+}
+```
+
+---
+
+
+
