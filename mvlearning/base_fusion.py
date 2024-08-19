@@ -87,10 +87,10 @@ class MVFusion(_MVFusionCore):
 
     def loss_batch(self, batch: dict) -> dict:
         views_dict, views_target = self.prepare_batch(batch)
-        if self.maug.lower() == "sensd" and self.training:
+        if self.training and self.maug.lower() == "sensd" and "drop_ratio" in self.maug_args:
             inference_views = augment_random_missing(self.view_names, drop_ratio=self.maug_args.get("drop_ratio", 0.5))
             out_dic = self(views_dict, inference_views=inference_views, missing_method=self.missing_method)
-        elif self.maug.lower() == "sensd" and self.training:
+        elif self.training and self.maug.lower() == "sensd":
             inference_views = augment_randomlist_missing(self.view_names)
             out_dic = self(views_dict, inference_views=inference_views, missing_method=self.missing_method)
         else:
