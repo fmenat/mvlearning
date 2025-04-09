@@ -1,3 +1,10 @@
+Metadata-Version: 2.1
+Name: mvlearning
+Version: 1.0.0
+Summary: Multi-view Learning framework
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+
 # Multi-view learning (mvlearning)
 Framework for different fusion strategies in multi-view learning with PyTorch. _Academic purposes_
 
@@ -44,8 +51,6 @@ pip install --editable .
 ## Sensor Dropout (SensD)
 
 [![paper](https://img.shields.io/badge/arXiv-2407.15512-D12424)](https://www.arxiv.org/abs/2407.15512) 
-
-![missing views](imgs/sensd.png)
 
 We include a new component based on our recent [paper](#citation). This component randomly drop sensors (or **views** in our case) during training. In practice the drop means it replace the values with 0, but other options can be easily extended. 
 
