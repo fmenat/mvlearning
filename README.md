@@ -1,5 +1,5 @@
-# Multi-view learning (mvlearning)
-Framework for different fusion strategies in multi-view learning with PyTorch. _Academic purposes_
+# MVLearning
+Multi-view learning framework for different fusion strategies implemented in PyTorch. _Academic purposes_
 
 ![Multi-view Learning](imgs/illustration.png)
 
