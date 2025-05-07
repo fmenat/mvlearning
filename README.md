@@ -41,7 +41,7 @@ pip install --editable .
 
 ---
 
-## Sensor Dropout (SensD)
+## SensD: Sensor Dropout
 
 [![paper](https://img.shields.io/badge/arXiv-2407.15512-D12424)](https://www.arxiv.org/abs/2407.15512) 
 
