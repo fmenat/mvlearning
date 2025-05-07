@@ -47,7 +47,7 @@ pip install --editable .
 
 ![missing views](imgs/sensd.png)
 
-We include a new component based on our recent [paper](#citation). This component randomly drop sensors (or **views** in our case) during training. In practice the drop means it replace the values with 0, but other options can be easily extended. 
+We include a new component based on our recent [paper](#citation). This component randomly drops sensors (namely **views** in our case) during training. In practice, the drop means it replaces the values with 0, but other options can be easily extended. 
 
 * In any of the model described ([fusion types](#fusion-types-usage)) the sensor dropout will work by just indicating *sensd* in the ``maug`` argument.  
 > The ``maug_args`` with *drop_ratio* is optional. In case it is not used it will randomly select one missing combination from the list of all possible missing cases.
